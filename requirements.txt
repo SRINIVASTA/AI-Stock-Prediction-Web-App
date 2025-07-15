@@ -3,5 +3,5 @@ pandas
 numpy
 yfinance
 scikit-learn
-tensorflow # Or tensorflow-cpu if you don't need GPU support
+tensorflow-cpu # Try this if 'tensorflow' fails.
 matplotlib
