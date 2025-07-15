@@ -1,0 +1,7 @@
+streamlit
+pandas
+numpy
+yfinance
+scikit-learn
+tensorflow # Or tensorflow-cpu if you don't need GPU support
+matplotlib
