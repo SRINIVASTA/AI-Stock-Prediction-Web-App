@@ -158,5 +158,5 @@ if st.sidebar.button("Predict"):
                 st.error("Failed to retrieve historical data. Please check ticker or date range.")
 
 st.markdown("---")
-st.markdown("Project by: [T.A.SRINIVAS/https://github.com](https://github.com)")
+st.markdown("Project by: [T.A.SRINIVAS](https://github.com/srinivasta)")
 st.markdown("Tech Stack: Python, TensorFlow, Keras, yfinance, scikit-learn, pandas, numpy, matplotlib, Streamlit")
