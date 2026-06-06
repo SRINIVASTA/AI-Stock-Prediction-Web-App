@@ -64,34 +64,41 @@ def predict_stock_prices(data, forecast_horizon, scaler, model):
     # Scale the data
     scaled_data = scaler.transform(close_prices)
 
-    n_lookback = 60 
+    # Automatically extract the exact lookback window from your model's input layer
+    try:
+        n_lookback = model.input_shape[1]
+    except Exception:
+        n_lookback = 60 # Fallback default
     
     if len(scaled_data) < n_lookback:
         st.warning(f"Not enough data to create sequences for prediction. Need at least {n_lookback} days.")
         return None, None
 
+    # Extract the last available window slice
     last_n_days = scaled_data[-n_lookback:]
-    
-    # Reshape explicitly to a 3D batch: (samples, time_steps, features)
     current_batch = last_n_days.reshape((1, n_lookback, 1))
+    
     predicted_scaled_prices = []
 
     for i in range(forecast_horizon):
-        # Predict next day's price -> output shape: (1, 1)
+        # Predict next day's price
         next_prediction = model.predict(current_batch, verbose=0)
-        predicted_scaled_prices.append(next_prediction)
         
-        # Reshape to match the 3D array slicing layout (1, 1, 1)
-        next_pred_reshaped = next_prediction.reshape((1, 1, 1))
+        # Extract scalar value from prediction array safely
+        pred_scalar = next_prediction[0, 0]
+        predicted_scaled_prices.append([pred_scalar])
         
-        # Slide the lookback window forward over axis 1
+        # Create 3D matrix piece for appending: (1, 1, 1)
+        next_pred_reshaped = np.array([[[pred_scalar]]])
+        
+        # Slide lookback array window forward on Axis 1
         current_batch = np.append(current_batch[:, 1:, :], next_pred_reshaped, axis=1)
 
-    # Inverse transform to extract true asset currency values
-    predicted_prices = scaler.inverse_transform(np.array(predicted_scaled_prices).reshape(-1, 1))
+    # Inverse transform values back to stock dollars
+    predicted_prices = scaler.inverse_transform(np.array(predicted_scaled_prices))
 
-    # Generate future dates for the predictions
-    last_date = data.index[-1]
+    # Generate dates tracking sequentially from the last historical point
+    last_date = pd.to_datetime(data.index[-1])
     future_dates = [last_date + datetime.timedelta(days=x) for x in range(1, forecast_horizon + 1)]
 
     predicted_df = pd.DataFrame(predicted_prices, index=future_dates, columns=['Predicted Close'])
@@ -114,26 +121,24 @@ if st.sidebar.button("Predict"):
         st.sidebar.error("Error: Start date must be before end date.")
     else:
         with st.spinner(f"Fetching data and predicting for {ticker_symbol}..."):
-            # 1. Collect historical stock data
             df = get_historical_data(ticker_symbol, start_date, end_date)
 
             if df is not None:
-                # 2. Preprocess and scale data
                 close_col = 'Close' if 'Close' in df.columns else df.columns
                 scaler = MinMaxScaler(feature_range=(0,1))
                 scaler.fit(df[close_col].values.reshape(-1, 1)) 
                 
-                # 3. Load pre-trained model directly from repository root path
                 model = load_trained_model("lstm_stock_model.h5") 
 
                 if model:
-                    # 4. Make predictions
+                    # Debug notification to check model configuration on screen
+                    st.sidebar.info(f"Model Input Shape Detected: {model.input_shape}")
+                    
                     predicted_df, historical_close_prices = predict_stock_prices(df, forecast_horizon, scaler, model)
 
                     if predicted_df is not None:
                         st.subheader(f"Historical vs. Predicted Prices for {ticker_symbol}")
 
-                        # Combine historical and predicted for visualization
                         historical_df = pd.DataFrame(historical_close_prices, index=df.index, columns=['Actual Close'])
                         
                         fig, ax = plt.subplots(figsize=(12, 6))
@@ -149,14 +154,13 @@ if st.sidebar.button("Predict"):
 
                         st.subheader("Predicted Prices Table")
                         st.dataframe(predicted_df)
-
                     else:
-                        st.warning("Prediction could not be generated. Check model and data processing steps.")
+                        st.warning("Prediction could not be generated. Check data processing steps.")
                 else:
-                    st.error("LSTM model could not be loaded. Please ensure it's saved correctly and the path is accurate.")
+                    st.error("LSTM model could not be loaded from root directory.")
             else:
-                st.error("Failed to retrieve historical data. Please check ticker or date range.")
+                st.error("Failed to retrieve historical data.")
 
 st.markdown("---")
-st.markdown("Project by: [T.A.SRINIVAS](https://github.com/srinivasta)")
+st.markdown("Project by: [T.A.SRINIVAS](https://github.com)")
 st.markdown("Tech Stack: Python, TensorFlow, Keras, yfinance, scikit-learn, pandas, numpy, matplotlib, Streamlit")
