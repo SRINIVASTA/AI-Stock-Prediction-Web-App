@@ -32,7 +32,7 @@ def get_historical_data(ticker, start_date, end_date):
             st.error(f"No data found for {ticker} in the specified date range. Please check the ticker symbol or date range.")
             return None
         
-        # Flatten MultiIndex columns returned by newer yfinance versions
+        # Flatten MultiIndex columns if returned by newer yfinance versions
         if isinstance(data.columns, pd.MultiIndex):
             data.columns = data.columns.get_level_values(0)
             
@@ -42,13 +42,13 @@ def get_historical_data(ticker, start_date, end_date):
         return None
 
 @st.cache_resource 
-def load_trained_model(model_path="model/lstm_stock_model.h5"):
-    """Loads the pre-trained LSTM model."""
+def load_trained_model(model_path="lstm_stock_model.h5"):
+    """Loads the pre-trained LSTM model from the root directory path."""
     try:
         model = load_model(model_path)
         return model
     except Exception as e:
-        st.warning(f"Could not load pre-trained model from {model_path}. You might need to train it first or check the path. Error: {e}")
+        st.warning(f"Could not load pre-trained model from {model_path}. Error: {e}")
         return None
 
 # --- Stock Prediction Function ---
@@ -57,7 +57,7 @@ def predict_stock_prices(data, forecast_horizon, scaler, model):
     if data is None or model is None:
         return None, None
 
-    # Handle close price array generation safely
+    # Target closing price dynamically
     close_col = 'Close' if 'Close' in data.columns else data.columns
     close_prices = data[close_col].values.reshape(-1, 1)
 
@@ -72,22 +72,22 @@ def predict_stock_prices(data, forecast_horizon, scaler, model):
 
     last_n_days = scaled_data[-n_lookback:]
     
-    # Reshape explicitly to 3D batch: (samples, time_steps, features) -> (1, 60, 1)
+    # Reshape explicitly to a 3D batch: (samples, time_steps, features)
     current_batch = last_n_days.reshape((1, n_lookback, 1))
     predicted_scaled_prices = []
 
     for i in range(forecast_horizon):
-        # Predict next step value -> shape output: (1, 1)
+        # Predict next day's price -> output shape: (1, 1)
         next_prediction = model.predict(current_batch, verbose=0)
         predicted_scaled_prices.append(next_prediction)
         
-        # Reshape prediction to match 3D tensor layout (1, 1, 1)
+        # Reshape to match the 3D array slicing layout (1, 1, 1)
         next_pred_reshaped = next_prediction.reshape((1, 1, 1))
         
-        # Slide window array forward on axis 1
+        # Slide the lookback window forward over axis 1
         current_batch = np.append(current_batch[:, 1:, :], next_pred_reshaped, axis=1)
 
-    # Inverse transform to get actual prices
+    # Inverse transform to extract true asset currency values
     predicted_prices = scaler.inverse_transform(np.array(predicted_scaled_prices).reshape(-1, 1))
 
     # Generate future dates for the predictions
@@ -103,7 +103,7 @@ st.sidebar.header("Configuration")
 
 ticker_symbol = st.sidebar.text_input("Enter Stock Ticker (e.g., AAPL)", "AAPL").upper()
 today = datetime.date.today()
-default_start_date = today - datetime.timedelta(days=365*3) # 3 years ago
+default_start_date = today - datetime.timedelta(days=365*3) # 3 years back
 start_date = st.sidebar.date_input("Start Date", value=default_start_date)
 end_date = st.sidebar.date_input("End Date", value=today)
 
@@ -123,8 +123,8 @@ if st.sidebar.button("Predict"):
                 scaler = MinMaxScaler(feature_range=(0,1))
                 scaler.fit(df[close_col].values.reshape(-1, 1)) 
                 
-                # 3. Load model asset
-                model = load_trained_model() 
+                # 3. Load pre-trained model directly from repository root path
+                model = load_trained_model("lstm_stock_model.h5") 
 
                 if model:
                     # 4. Make predictions
@@ -158,5 +158,5 @@ if st.sidebar.button("Predict"):
                 st.error("Failed to retrieve historical data. Please check ticker or date range.")
 
 st.markdown("---")
-st.markdown("Project by: [T.A.SRINIVAS/https://github.com/srinivasta](https://github.com/srinivasta)")
+st.markdown("Project by: [T.A.SRINIVAS/https://github.com](https://github.com)")
 st.markdown("Tech Stack: Python, TensorFlow, Keras, yfinance, scikit-learn, pandas, numpy, matplotlib, Streamlit")
